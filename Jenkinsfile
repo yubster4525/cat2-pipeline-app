@@ -11,61 +11,56 @@ pipeline {
     AWS_REGION = 'ap-south-1'
     ECR_REPOSITORY = 'cat2-pipeline-app'
     AWS_ACCOUNT_ID = credentials('aws-account-id')
-    CLUSTER_NAME = 'cat2-pipeline-cluster'
-    SERVICE_NAME = 'cat2-pipeline-service'
-    EXECUTION_ROLE_ARN = credentials('ecs-execution-role-arn')
-    TASK_ROLE_ARN = credentials('ecs-task-role-arn')
+    CLUSTER_NAME = 'cat2-cluster'      // <-- your real cluster
+    SERVICE_NAME = 'cat2-service'      // <-- your real service
     LOG_GROUP = '/ecs/cat2-pipeline-app'
-    NOTIFY_RECIPIENTS = 'devops-team@example.com'
   }
 
-  options {
-    timestamps()
-    ansiColor('xterm')
-  }
+  options { timestamps() }
 
   stages {
     stage('Prepare') {
       steps {
         script {
           env.RESOLVED_IMAGE_NAME = params.IMAGE_NAME?.trim() ? params.IMAGE_NAME.trim() : 'cat2-pipeline-app'
-          env.RESOLVED_IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_NUMBER
+          env.RESOLVED_IMAGE_TAG  = params.IMAGE_TAG?.trim()  ? params.IMAGE_TAG.trim()  : env.BUILD_NUMBER
+          // Compute role ARNs here; no extra Jenkins creds needed
+          env.EXECUTION_ROLE_ARN = "arn:aws:iam::${env.AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole"
+          env.TASK_ROLE_ARN      = ""  // none for this app
           echo "Using Docker tag ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}"
         }
       }
     }
 
     stage('Checkout') {
-      steps {
-        checkout scm
-      }
+      steps { checkout scm }
     }
 
     stage('Install Dependencies') {
       steps {
         dir('app') {
-          sh 'npm install'
+          sh 'npm ci || npm install'
         }
       }
     }
 
     stage('Unit Tests') {
       steps {
-        dir('app') {
-          sh 'npm test'
-        }
+        dir('app') { sh 'npm test' }
       }
     }
 
     stage('Build Docker Image') {
       steps {
-        sh 'docker build -t ${RESOLVED_IMAGE_NAME}:${RESOLVED_IMAGE_TAG} .'
+        sh 'docker build --platform=linux/amd64 -t ${RESOLVED_IMAGE_NAME}:${RESOLVED_IMAGE_TAG} .'
       }
     }
 
     stage('Push to Amazon ECR') {
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+        withCredentials([usernamePassword(credentialsId: 'aws-jenkins-creds',
+                                          usernameVariable: 'AWS_ACCESS_KEY_ID',
+                                          passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
           sh '''
             set -e
             IMAGE_NAME=${RESOLVED_IMAGE_NAME} \
@@ -80,11 +75,11 @@ pipeline {
     }
 
     stage('Deploy to Amazon ECS') {
-      when {
-        expression { return params.AUTO_DEPLOY }
-      }
+      when { expression { return params.AUTO_DEPLOY } }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+        withCredentials([usernamePassword(credentialsId: 'aws-jenkins-creds',
+                                          usernameVariable: 'AWS_ACCESS_KEY_ID',
+                                          passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
           sh '''
             set -e
             IMAGE_NAME=${RESOLVED_IMAGE_NAME} \
@@ -105,15 +100,7 @@ pipeline {
   }
 
   post {
-    success {
-      mail to: NOTIFY_RECIPIENTS,
-           subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-           body: "Pipeline completed successfully. Image ${RESOLVED_IMAGE_NAME}:${RESOLVED_IMAGE_TAG} deployed to ${SERVICE_NAME}."
-    }
-    failure {
-      mail to: NOTIFY_RECIPIENTS,
-           subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-           body: "Pipeline failed. Check Jenkins console for details."
-    }
+    success { echo "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER} — deployed ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}" }
+    failure { echo "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}. Check console output." }
   }
 }
