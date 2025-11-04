@@ -1,6 +1,8 @@
 pipeline {
   agent any
 
+  tools { nodejs 'Node18' }   // <-- uses the NodeJS tool you just configured
+
   parameters {
     string(name: 'IMAGE_NAME', defaultValue: 'cat2-pipeline-app', description: 'Docker image name to build and deploy.')
     string(name: 'IMAGE_TAG', defaultValue: '', description: 'Optional image tag (defaults to Jenkins build number).')
@@ -8,15 +10,17 @@ pipeline {
   }
 
   environment {
-    AWS_REGION = 'ap-south-1'
-    ECR_REPOSITORY = 'cat2-pipeline-app'
-    AWS_ACCOUNT_ID = credentials('aws-account-id')
-    CLUSTER_NAME = 'cat2-cluster'      // <-- your real cluster
-    SERVICE_NAME = 'cat2-service'      // <-- your real service
-    LOG_GROUP = '/ecs/cat2-pipeline-app'
+    AWS_REGION       = 'ap-south-1'
+    ECR_REPOSITORY   = 'cat2-pipeline-app'
+    AWS_ACCOUNT_ID   = credentials('aws-account-id')
+    CLUSTER_NAME     = 'cat2-cluster'         // your real cluster
+    SERVICE_NAME     = 'cat2-service'         // your real service
+    EXECUTION_ROLE_ARN = 'arn:aws:iam::639230722149:role/ecsTaskExecutionRole'
+    TASK_ROLE_ARN    = ''                     // none for this app
+    LOG_GROUP        = '/ecs/cat2-pipeline-app'
   }
 
-  options { timestamps() }
+  options { timestamps() }  // remove ansiColor to avoid plugin requirement
 
   stages {
     stage('Prepare') {
@@ -24,23 +28,16 @@ pipeline {
         script {
           env.RESOLVED_IMAGE_NAME = params.IMAGE_NAME?.trim() ? params.IMAGE_NAME.trim() : 'cat2-pipeline-app'
           env.RESOLVED_IMAGE_TAG  = params.IMAGE_TAG?.trim()  ? params.IMAGE_TAG.trim()  : env.BUILD_NUMBER
-          // Compute role ARNs here; no extra Jenkins creds needed
-          env.EXECUTION_ROLE_ARN = "arn:aws:iam::${env.AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole"
-          env.TASK_ROLE_ARN      = ""  // none for this app
           echo "Using Docker tag ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}"
         }
       }
     }
 
-    stage('Checkout') {
-      steps { checkout scm }
-    }
+    stage('Checkout') { steps { checkout scm } }
 
     stage('Install Dependencies') {
       steps {
-        dir('app') {
-          sh 'npm ci || npm install'
-        }
+        dir('app') { sh 'npm ci || npm install' }
       }
     }
 
