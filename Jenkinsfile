@@ -1,8 +1,6 @@
 pipeline {
   agent any
 
-  tools { nodejs 'Node18' }   // <-- uses the NodeJS tool you just configured
-
   parameters {
     string(name: 'IMAGE_NAME', defaultValue: 'cat2-pipeline-app', description: 'Docker image name to build and deploy.')
     string(name: 'IMAGE_TAG', defaultValue: '', description: 'Optional image tag (defaults to Jenkins build number).')
@@ -10,40 +8,55 @@ pipeline {
   }
 
   environment {
-    AWS_REGION       = 'ap-south-1'
-    ECR_REPOSITORY   = 'cat2-pipeline-app'
-    AWS_ACCOUNT_ID   = credentials('aws-account-id')
-    CLUSTER_NAME     = 'cat2-cluster'         // your real cluster
-    SERVICE_NAME     = 'cat2-service'         // your real service
+    AWS_REGION = 'ap-south-1'
+    ECR_REPOSITORY = 'cat2-pipeline-app'
+    AWS_ACCOUNT_ID = credentials('aws-account-id')
+    CLUSTER_NAME = 'cat2-cluster'
+    SERVICE_NAME = 'cat2-service'
     EXECUTION_ROLE_ARN = 'arn:aws:iam::639230722149:role/ecsTaskExecutionRole'
-    TASK_ROLE_ARN    = ''                     // none for this app
-    LOG_GROUP        = '/ecs/cat2-pipeline-app'
+    TASK_ROLE_ARN = ''
+    LOG_GROUP = '/ecs/cat2-pipeline-app'
   }
 
-  options { timestamps() }  // remove ansiColor to avoid plugin requirement
+  options {
+    timestamps()
+    ansiColor('xterm')
+  }
 
   stages {
     stage('Prepare') {
       steps {
         script {
           env.RESOLVED_IMAGE_NAME = params.IMAGE_NAME?.trim() ? params.IMAGE_NAME.trim() : 'cat2-pipeline-app'
-          env.RESOLVED_IMAGE_TAG  = params.IMAGE_TAG?.trim()  ? params.IMAGE_TAG.trim()  : env.BUILD_NUMBER
+          env.RESOLVED_IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_NUMBER
           echo "Using Docker tag ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}"
         }
       }
     }
 
-    stage('Checkout') { steps { checkout scm } }
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
 
     stage('Install Dependencies') {
       steps {
-        dir('app') { sh 'npm ci || npm install' }
+        dir('app') {
+          sh '''
+            set -e
+            node -v
+            npm ci || npm install
+          '''
+        }
       }
     }
 
     stage('Unit Tests') {
       steps {
-        dir('app') { sh 'npm test' }
+        dir('app') {
+          sh 'npm test'
+        }
       }
     }
 
@@ -55,9 +68,7 @@ pipeline {
 
     stage('Push to Amazon ECR') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'aws-jenkins-creds',
-                                          usernameVariable: 'AWS_ACCESS_KEY_ID',
-                                          passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
           sh '''
             set -e
             IMAGE_NAME=${RESOLVED_IMAGE_NAME} \
@@ -72,11 +83,11 @@ pipeline {
     }
 
     stage('Deploy to Amazon ECS') {
-      when { expression { return params.AUTO_DEPLOY } }
+      when {
+        expression { return params.AUTO_DEPLOY }
+      }
       steps {
-        withCredentials([usernamePassword(credentialsId: 'aws-jenkins-creds',
-                                          usernameVariable: 'AWS_ACCESS_KEY_ID',
-                                          passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
           sh '''
             set -e
             IMAGE_NAME=${RESOLVED_IMAGE_NAME} \
@@ -97,7 +108,11 @@ pipeline {
   }
 
   post {
-    success { echo "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER} — deployed ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}" }
-    failure { echo "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}. Check console output." }
+    success {
+      echo "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER} — deployed ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}"
+    }
+    failure {
+      echo "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}. Check console output."
+    }
   }
 }
