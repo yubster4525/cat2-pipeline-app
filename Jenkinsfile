@@ -1,6 +1,10 @@
 pipeline {
   agent any
 
+  tools {
+    nodejs 'Node18'
+  }
+
   parameters {
     string(name: 'IMAGE_NAME', defaultValue: 'cat2-pipeline-app', description: 'Docker image name to build and deploy.')
     string(name: 'IMAGE_TAG', defaultValue: '', description: 'Optional image tag (defaults to Jenkins build number).')
