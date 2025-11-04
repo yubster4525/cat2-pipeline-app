@@ -12,6 +12,7 @@ pipeline {
   }
 
   environment {
+    PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
     AWS_REGION = 'ap-south-1'
     ECR_REPOSITORY = 'cat2-pipeline-app'
     AWS_ACCOUNT_ID = credentials('aws-account-id')
