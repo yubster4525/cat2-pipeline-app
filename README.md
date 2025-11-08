@@ -113,24 +113,6 @@ Update the template if your container ports or environment variables differ.
 - Extend `deploy_to_ecs.sh` to emit additional metrics or integrate with AWS CloudWatch Synthetics for uptime checks.
 - Jenkins pipeline currently relies on email alerts; replace/add Slack or Amazon SNS notifications as required by your environment.
 
-## Security & Compliance
-
-- Amazon ECR repository-level scan-on-push is enabled to detect CVEs immediately after every image push. CLI: `aws ecr put-image-scanning-configuration --repository-name cat2-pipeline-app --image-scanning-configuration scanOnPush=true --region ap-south-1`.
-- Optional: add `trivy image ${RESOLVED_IMAGE_NAME}:${RESOLVED_IMAGE_TAG}` inside the Jenkins pipeline for an additional supply-chain gate.
-
-![ECR scan on push](screenshots/ecr-scan-on-push.png)
-
-## HTTPS & Network Hardening
-
-- The Application Load Balancer terminates TLS with an ACM-issued certificate on listener `HTTPS:443` and redirects HTTP requests to HTTPS.
-- AWS WAF (optional) can be attached to the ALB ARN for extra filtering.
-
-![ALB HTTPS listener with ACM certificate](screenshots/alb-https-listener.png)
-
-## Infrastructure as Code Reference
-
-- `infra/task-definition-template.json` represents the Fargate task definition, ready to be parameterised by Terraform/CloudFormation.
-- Additional IaC (ECS service, ALB, security groups) can be layered using Terraform modules or AWS CDK; the repository keeps infra artefacts under `infra/` for traceability.
 
 ## Submission Checklist
 
@@ -140,9 +122,7 @@ Update the template if your container ports or environment variables differ.
 - [ ] Screenshot of Jenkins email/Slack notification (e.g., `screenshots/jenkins-email-notification.png`).
 - [ ] Screenshot of Jenkins console or stages view for a successful run.
 - [ ] Screenshot of the image published in Amazon ECR.
-- [ ] Screenshot showing scan-on-push enabled or Trivy results.
 - [ ] Screenshot of the application endpoint (e.g., ALB DNS) showing the running app.
-- [ ] Screenshot demonstrating HTTPS listener + ACM on the ALB.
 - [ ] Screenshot of the Jenkinsfile (or attach the file itself) for submission.
 - [ ] Extracredit: Screenshot/evidence of CloudWatch metrics or alerts.
 

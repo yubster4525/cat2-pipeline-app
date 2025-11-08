@@ -138,12 +138,6 @@ The deployment relies on IAM, ECR, ECS, and ALB resources summarized in Table~\r
   \label{fig:ecr}
 \end{figure}
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.85\linewidth]{screenshots/ecr-scan-on-push.png}
-  \caption{Security scan-on-push enabled for the ECR repository}
-  \label{fig:ecr-scan}
-\end{figure}
 
 \begin{figure}[H]
   \centering
@@ -169,12 +163,6 @@ The deployment relies on IAM, ECR, ECS, and ALB resources summarized in Table~\r
   \label{fig:alb}
 \end{figure}
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.8\linewidth]{screenshots/alb-https-listener.png}
-  \caption{HTTPS (port 443) listener bound to an ACM certificate with HTTP\textrightarrow{}HTTPS redirect}
-  \label{fig:alb-https}
-\end{figure}
 
 \begin{figure}[H]
   \centering
@@ -230,20 +218,12 @@ Table~\ref{tab:checklist} links every submission requirement to a concrete file/
   Lint/test proof & Jenkins console excerpt & Fig.~\ref{fig:jenkins-tests} \\
   Notification proof & Email (or Slack) success message & Fig.~\ref{fig:jenkins-email} \\
   ECR image screenshot & Repository with pushed images & Fig.~\ref{fig:ecr} \\
-  Security scan evidence & ECR scan-on-push screenshot & Fig.~\ref{fig:ecr-scan} \\
   Running application endpoint & Browser screenshot of ALB DNS & Fig.~\ref{fig:endpoint} \\
-  HTTPS listener evidence & ACM-backed HTTPS listener screenshot & Fig.~\ref{fig:alb-https} \\
   Jenkinsfile reference & GitHub view of Jenkinsfile & Fig.~\ref{fig:jenkinsfile} \\
   CloudWatch logs (extra credit) & Log stream screenshot & Fig.~\ref{fig:cloudwatch} \\
   Additional AWS evidence & ECS service and ALB details & Fig.~\ref{fig:ecs}, Fig.~\ref{fig:alb} \\
-  IaC snapshot & Task definition template listing & Listing~\ref{lst:task-def} \\
   \bottomrule
 \end{longtable}
-
-\section{Infrastructure as Code Snapshot}
-The ECS task definition template checked into \texttt{infra/} keeps deployments reproducible and ready for Terraform/CloudFormation ingestion. Listing~\ref{lst:task-def} shows the JSON source used by \texttt{scripts/deploy\_to\_ecs.sh}.
-
-\lstinputlisting[caption={Task definition template in \texttt{infra/task-definition-template.json}},label={lst:task-def}]{infra/task-definition-template.json}
 
 \section{Conclusion}
 The automated pipeline reliably builds, tests, containerizes, and deploys the Node.js service to AWS Fargate with full traceability. All checklist items have been fulfilled with accompanying screenshots, demonstrating end-to-end coverage of the CAT2 assignment requirements.
