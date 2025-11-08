@@ -19,7 +19,7 @@ pipeline {
     CLUSTER_NAME = 'cat2-cluster'
     SERVICE_NAME = 'cat2-service'
     EXECUTION_ROLE_ARN = 'arn:aws:iam::639230722149:role/ecsTaskExecutionRole'
-    TASK_ROLE_ARN = ''
+    TASK_ROLE_ARN = 'arn:aws:iam::639230722149:role/ecsTaskExecutionRole'
     LOG_GROUP = '/ecs/cat2-pipeline-app'
   }
 
