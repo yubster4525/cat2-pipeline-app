@@ -72,7 +72,11 @@ pipeline {
 
     stage('Push to Amazon ECR') {
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+        withCredentials([usernamePassword(
+            credentialsId: 'aws-jenkins-creds',
+            usernameVariable: 'AWS_ACCESS_KEY_ID',
+            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+        )]) {
           sh '''
             set -e
             IMAGE_NAME=${RESOLVED_IMAGE_NAME} \
@@ -91,7 +95,11 @@ pipeline {
         expression { return params.AUTO_DEPLOY }
       }
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+        withCredentials([usernamePassword(
+            credentialsId: 'aws-jenkins-creds',
+            usernameVariable: 'AWS_ACCESS_KEY_ID',
+            passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+        )]) {
           sh '''
             set -e
             IMAGE_NAME=${RESOLVED_IMAGE_NAME} \
