@@ -111,7 +111,7 @@ Update the template if your container ports or environment variables differ.
 
 - ECS task definition pushes logs to CloudWatch (log group supplied via `LOG_GROUP`).
 - Extend `deploy_to_ecs.sh` to emit additional metrics or integrate with AWS CloudWatch Synthetics for uptime checks.
-- Jenkins pipeline currently relies on email alerts; replace/add Slack or Amazon SNS notifications as required by your environment.
+- Jenkins pipeline currently emits success/failure notifications (Mailer/Slack) if configured; replace or disable this stage per your environment.
 
 
 ## Submission Checklist
@@ -119,7 +119,6 @@ Update the template if your container ports or environment variables differ.
 - [ ] Architecture diagram (export Mermaid render or replicate in draw.io) showing CI/CD flow.
 - [ ] Screenshot of GitHub webhook configuration + branch protection (e.g., `screenshots/github-webhook.png`).
 - [ ] Screenshot of Jenkins lint/test console output (e.g., `screenshots/jenkins-npm-test.png`).
-- [ ] Screenshot of Jenkins email/Slack notification (e.g., `screenshots/jenkins-email-notification.png`).
 - [ ] Screenshot of Jenkins console or stages view for a successful run.
 - [ ] Screenshot of the image published in Amazon ECR.
 - [ ] Screenshot of the application endpoint (e.g., ALB DNS) showing the running app.

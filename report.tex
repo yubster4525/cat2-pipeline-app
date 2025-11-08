@@ -80,7 +80,7 @@ Git branching follows a simple promotion model: `main` is protected and mirrors 
 \section{CI/CD Pipeline Implementation}
 The Jenkinsfile configures the \texttt{Node18} tool, runs `npm ci`, enforces ESLint via a dedicated \textit{Lint} stage, executes unit tests, builds the Docker image, pushes it to ECR via \texttt{scripts/push\_to\_ecr.sh}, and optionally deploys to ECS with \texttt{scripts/deploy\_to\_ecs.sh}. Docker tags default to the short Git commit (`GIT\_COMMIT[0:7]`) unless an override parameter is supplied. Credentials (`aws-jenkins-creds`, `aws-account-id`, role ARNs) are injected through Jenkins secrets, and the `post` block sends email notifications to the configured distribution list.
 
-Figure~\ref{fig:jenkins-stage} captures the stage view for Build \#14, showing each phase (Checkout, Prepare Metadata, Install Dependencies, Lint, Unit Tests, Build Docker Image, Push to Amazon ECR, Deploy to Amazon ECS, Post Actions) succeeded. Figure~\ref{fig:jenkins-console} provides the console log snippet that ends with the deployment success message, while Figure~\ref{fig:jenkins-tests} highlights the `npm test` summary. Email delivery proof is captured in Figure~\ref{fig:jenkins-email}.
+Figure~\ref{fig:jenkins-stage} captures the stage view for Build \#14, showing each phase (Checkout, Prepare Metadata, Install Dependencies, Lint, Unit Tests, Build Docker Image, Push to Amazon ECR, Deploy to Amazon ECS, Post Actions) succeeded. Figure~\ref{fig:jenkins-console} provides the console log snippet that ends with the deployment success message, while Figure~\ref{fig:jenkins-tests} highlights the `npm test` summary.
 
 \begin{figure}[H]
   \centering
@@ -101,13 +101,6 @@ Figure~\ref{fig:jenkins-stage} captures the stage view for Build \#14, showing e
   \includegraphics[width=0.8\linewidth]{screenshots/jenkins-npm-test.png}
   \caption{Console proof of `npm test` passing inside Jenkins}
   \label{fig:jenkins-tests}
-\end{figure}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.8\linewidth]{screenshots/jenkins-email-notification.png}
-  \caption{Email notification sent by Jenkins Mailer after pipeline completion}
-  \label{fig:jenkins-email}
 \end{figure}
 
 \section{AWS Infrastructure Evidence}
@@ -216,7 +209,6 @@ Table~\ref{tab:checklist} links every submission requirement to a concrete file/
   SCM + webhook evidence & GitHub webhook / branch protection screenshot & Fig.~\ref{fig:webhook} \\
   Jenkins console or stage view & Stage graph and console screenshots & Fig.~\ref{fig:jenkins-stage}, Fig.~\ref{fig:jenkins-console} \\
   Lint/test proof & Jenkins console excerpt & Fig.~\ref{fig:jenkins-tests} \\
-  Notification proof & Email (or Slack) success message & Fig.~\ref{fig:jenkins-email} \\
   ECR image screenshot & Repository with pushed images & Fig.~\ref{fig:ecr} \\
   Running application endpoint & Browser screenshot of ALB DNS & Fig.~\ref{fig:endpoint} \\
   Jenkinsfile reference & GitHub view of Jenkinsfile & Fig.~\ref{fig:jenkinsfile} \\
