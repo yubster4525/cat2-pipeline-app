@@ -1,0 +1,251 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\lstset{basicstyle=\ttfamily\small,breaklines=true}
+
+\title{CAT2 CI/CD Pipeline Report}
+\author{Yuvan Raj Krishna}
+\date{\today}
+
+\begin{document}
+\pagestyle{fancy}
+\setlength{\headheight}{14pt}
+\fancyhf{}
+\fancyhead[L]{Yuvan Raj Krishna}
+\fancyhead[R]{22011102127}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyhead[L]{Yuvan Raj Krishna}
+  \fancyhead[R]{22011102127}
+  \fancyfoot[C]{\thepage}
+  \renewcommand{\headrulewidth}{0.4pt}
+}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction and Objectives}
+The CAT2 assignment required building a fully automated CI/CD pipeline that pulls a Node.js web service from GitHub, validates the code, produces a Docker image, pushes it into Amazon Elastic Container Registry (ECR), and deploys the container to Amazon Elastic Container Service (ECS) Fargate behind an Application Load Balancer (ALB). The goal of this report is to document the implemented architecture, tool-chain, build/test steps, AWS resources, and concrete evidence collected through screenshots. Every deliverable in the submission checklist (architecture diagram, Jenkins success proof, ECR image view, running endpoint, Jenkinsfile, and CloudWatch logs) is satisfied and referenced in later sections.
+
+\section{Architecture Overview}
+The exported diagram in Figure~\ref{fig:architecture} illustrates the end-to-end workflow: commits flow from GitHub to Jenkins, which executes test/build/deploy stages, publishes images to ECR, and updates the ECS service that is reachable via an ALB. CloudWatch captures runtime logs and Jenkins sends terminal notifications.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\linewidth]{screenshots/architecture-diagram.png}
+  \caption{Architecture diagram showing GitHub \textrightarrow{} Jenkins \textrightarrow{} ECR/ECS/ALB flow}
+  \label{fig:architecture}
+\end{figure}
+
+\section{Repository and Tooling}
+The project root contains the Node.js source under \texttt{app/}, automation scripts in \texttt{scripts/}, infrastructure templates under \texttt{infra/}, and the declarative Jenkinsfile at the root. GitHub is the system of record and Jenkins tracks the repository directly. Figure~\ref{fig:repo} shows the repository layout, and Figure~\ref{fig:jenkinsfile} highlights the Jenkinsfile that defines the pipeline.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\linewidth]{screenshots/github-repo-overview.png}
+  \caption{GitHub repository overview}
+  \label{fig:repo}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\linewidth]{screenshots/github-jenkinsfile-view.png}
+  \caption{Jenkinsfile stored in the repository}
+  \label{fig:jenkinsfile}
+\end{figure}
+
+\section{Source Control and Triggers}
+Git branching follows a simple promotion model: `main` is protected and mirrors production, `dev` is the integration branch, and features ship through short-lived `feature/*` branches enforced with pull-request reviews plus status checks (lint, test, deploy). A GitHub webhook (Figure~\ref{fig:webhook}) sends push events to Jenkins' `/github-webhook/` endpoint so CI starts automatically after every merge.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\linewidth]{screenshots/github-webhook.png}
+  \caption{GitHub webhook targeting Jenkins with branch protection enabled}
+  \label{fig:webhook}
+\end{figure}
+
+\section{CI/CD Pipeline Implementation}
+The Jenkinsfile configures the \texttt{Node18} tool, runs `npm ci`, enforces ESLint via a dedicated \textit{Lint} stage, executes unit tests, builds the Docker image, pushes it to ECR via \texttt{scripts/push\_to\_ecr.sh}, and optionally deploys to ECS with \texttt{scripts/deploy\_to\_ecs.sh}. Docker tags default to the short Git commit (`GIT\_COMMIT[0:7]`) unless an override parameter is supplied. Credentials (`aws-jenkins-creds`, `aws-account-id`, role ARNs) are injected through Jenkins secrets, and the `post` block sends email notifications to the configured distribution list.
+
+Figure~\ref{fig:jenkins-stage} captures the stage view for Build \#14, showing each phase (Checkout, Prepare Metadata, Install Dependencies, Lint, Unit Tests, Build Docker Image, Push to Amazon ECR, Deploy to Amazon ECS, Post Actions) succeeded. Figure~\ref{fig:jenkins-console} provides the console log snippet that ends with the deployment success message, while Figure~\ref{fig:jenkins-tests} highlights the `npm test` summary. Email delivery proof is captured in Figure~\ref{fig:jenkins-email}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{screenshots/jenkins-stage-graph.png}
+  \caption{Jenkins pipeline stage graph for successful run \#14}
+  \label{fig:jenkins-stage}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\linewidth]{screenshots/jenkins-console-success.png}
+  \caption{Jenkins console showing deployment success}
+  \label{fig:jenkins-console}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\linewidth]{screenshots/jenkins-npm-test.png}
+  \caption{Console proof of `npm test` passing inside Jenkins}
+  \label{fig:jenkins-tests}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\linewidth]{screenshots/jenkins-email-notification.png}
+  \caption{Email notification sent by Jenkins Mailer after pipeline completion}
+  \label{fig:jenkins-email}
+\end{figure}
+
+\section{AWS Infrastructure Evidence}
+The deployment relies on IAM, ECR, ECS, and ALB resources summarized in Table~\ref{tab:aws}. Each component is supported by screenshots.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{p{0.2\linewidth}p{0.3\linewidth}p{0.4\linewidth}}
+    \toprule
+    Component & Resource & Notes / Evidence \\
+    \midrule
+    IAM & `ecsTaskExecutionRole` & Trust policy and ARN captured in screenshots `iam-task-execution-role-json.png` and `iam-task-execution-role-arn.png`. \\
+    ECR & `cat2-pipeline-app` & Repository and pushed artifacts (`latest`, timestamped tags) confirmed in Figure~\ref{fig:ecr}. \\
+    ECS & `cat2-cluster` / `cat2-service` & Fargate service runs one task on port 3000; Figure~\ref{fig:ecs}. \\
+    ALB & `cat2-alb` with target group `cat2-tg` & Listener `HTTP:80` routes to healthy target; evidenced in Figure~\ref{fig:alb}. \\
+    Logging & CloudWatch log group `/ecs/cat2-pipeline-app` & Runtime logs shown in Figure~\ref{fig:cloudwatch}. \\
+    Endpoint & ALB DNS & Browser proof in Figure~\ref{fig:endpoint}. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Summary of AWS resources used in the deployment}
+  \label{tab:aws}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\linewidth]{screenshots/ecr-image-list.png}
+  \caption{Amazon ECR repository `cat2-pipeline-app` with pushed images}
+  \label{fig:ecr}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\linewidth]{screenshots/ecr-scan-on-push.png}
+  \caption{Security scan-on-push enabled for the ECR repository}
+  \label{fig:ecr-scan}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\linewidth]{screenshots/ecs-service-running-task.png}
+  \caption{ECS service `cat2-service` running the latest task definition}
+  \label{fig:ecs}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{screenshots/alb-details.png}
+    \caption{ALB and listener configuration}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{screenshots/alb-target-group-details.png}
+    \caption{Target group health (port 3000)}
+  \end{subfigure}
+  \caption{Application Load Balancer evidence}
+  \label{fig:alb}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\linewidth]{screenshots/alb-https-listener.png}
+  \caption{HTTPS (port 443) listener bound to an ACM certificate with HTTP\textrightarrow{}HTTPS redirect}
+  \label{fig:alb-https}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.65\linewidth]{screenshots/app-lb-endpoint-nov8.png}
+  \caption{Public endpoint showing the running application}
+  \label{fig:endpoint}
+\end{figure}
+
+\section{Build, Test, and Deployment Commands}
+Developers can reproduce the pipeline locally using the commands below. They mirror the Jenkins stages and the helper shell scripts used in CI.
+
+\begin{lstlisting}[language=bash]
+# Install and test the Node.js service
+cd app
+npm ci
+npm run lint
+npm test
+
+# Build and tag the Docker image
+cd ..
+docker build --platform=linux/amd64 -t cat2-pipeline-app:dev .
+
+# Push image to ECR (expects AWS_* env vars)
+./scripts/push_to_ecr.sh
+
+# Deploy to ECS using the rendered task definition
+./scripts/deploy_to_ecs.sh
+\end{lstlisting}
+
+Both shell scripts enable `set -e` for safe execution and rely on parameters exported by Jenkins (account id, region, repository, cluster/service names, role ARNs, and CloudWatch log group).
+
+\section{Monitoring and Observability}
+CloudWatch captures container logs under `/ecs/cat2-pipeline-app`. Figure~\ref{fig:cloudwatch} shows the most recent entries produced by the deployed task, demonstrating that the service boots (`node src/server.js`) and listens on port 3000. Additional metrics (CPU/memory) can be enabled via ECS/CloudWatch dashboards if required.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\linewidth]{screenshots/cloudwatch-logs.png}
+  \caption{CloudWatch log group entries for the running ECS task}
+  \label{fig:cloudwatch}
+\end{figure}
+
+\section{Checklist Evidence Map}
+Table~\ref{tab:checklist} links every submission requirement to a concrete file/figure.
+
+\begin{longtable}{p{0.3\linewidth}p{0.4\linewidth}p{0.2\linewidth}}
+  \caption{Submission checklist coverage}\label{tab:checklist}\\
+  \toprule
+  Requirement & Evidence & Figure/File \\
+  \midrule
+  Architecture diagram & Exported PNG from draw.io & Fig.~\ref{fig:architecture} / `screenshots/architecture-diagram.png` \\
+  SCM + webhook evidence & GitHub webhook / branch protection screenshot & Fig.~\ref{fig:webhook} \\
+  Jenkins console or stage view & Stage graph and console screenshots & Fig.~\ref{fig:jenkins-stage}, Fig.~\ref{fig:jenkins-console} \\
+  Lint/test proof & Jenkins console excerpt & Fig.~\ref{fig:jenkins-tests} \\
+  Notification proof & Email (or Slack) success message & Fig.~\ref{fig:jenkins-email} \\
+  ECR image screenshot & Repository with pushed images & Fig.~\ref{fig:ecr} \\
+  Security scan evidence & ECR scan-on-push screenshot & Fig.~\ref{fig:ecr-scan} \\
+  Running application endpoint & Browser screenshot of ALB DNS & Fig.~\ref{fig:endpoint} \\
+  HTTPS listener evidence & ACM-backed HTTPS listener screenshot & Fig.~\ref{fig:alb-https} \\
+  Jenkinsfile reference & GitHub view of Jenkinsfile & Fig.~\ref{fig:jenkinsfile} \\
+  CloudWatch logs (extra credit) & Log stream screenshot & Fig.~\ref{fig:cloudwatch} \\
+  Additional AWS evidence & ECS service and ALB details & Fig.~\ref{fig:ecs}, Fig.~\ref{fig:alb} \\
+  IaC snapshot & Task definition template listing & Listing~\ref{lst:task-def} \\
+  \bottomrule
+\end{longtable}
+
+\section{Infrastructure as Code Snapshot}
+The ECS task definition template checked into \texttt{infra/} keeps deployments reproducible and ready for Terraform/CloudFormation ingestion. Listing~\ref{lst:task-def} shows the JSON source used by \texttt{scripts/deploy\_to\_ecs.sh}.
+
+\lstinputlisting[caption={Task definition template in \texttt{infra/task-definition-template.json}},label={lst:task-def}]{infra/task-definition-template.json}
+
+\section{Conclusion}
+The automated pipeline reliably builds, tests, containerizes, and deploys the Node.js service to AWS Fargate with full traceability. All checklist items have been fulfilled with accompanying screenshots, demonstrating end-to-end coverage of the CAT2 assignment requirements.
+
+\end{document}

@@ -21,6 +21,7 @@ pipeline {
     EXECUTION_ROLE_ARN = 'arn:aws:iam::639230722149:role/ecsTaskExecutionRole'
     TASK_ROLE_ARN = 'arn:aws:iam::639230722149:role/ecsTaskExecutionRole'
     LOG_GROUP = '/ecs/cat2-pipeline-app'
+    NOTIFY_RECIPIENTS = 'devops-team@example.com'
   }
 
   options {
@@ -28,19 +29,20 @@ pipeline {
   }
 
   stages {
-    stage('Prepare') {
-      steps {
-        script {
-          env.RESOLVED_IMAGE_NAME = params.IMAGE_NAME?.trim() ? params.IMAGE_NAME.trim() : 'cat2-pipeline-app'
-          env.RESOLVED_IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : env.BUILD_NUMBER
-          echo "Using Docker tag ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}"
-        }
-      }
-    }
-
     stage('Checkout') {
       steps {
         checkout scm
+      }
+    }
+
+    stage('Prepare Metadata') {
+      steps {
+        script {
+          env.RESOLVED_IMAGE_NAME = params.IMAGE_NAME?.trim() ? params.IMAGE_NAME.trim() : 'cat2-pipeline-app'
+          def gitShort = env.GIT_COMMIT?.take(7)
+          env.RESOLVED_IMAGE_TAG = params.IMAGE_TAG?.trim() ? params.IMAGE_TAG.trim() : (gitShort ?: env.BUILD_NUMBER)
+          echo "Using Docker tag ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}"
+        }
       }
     }
 
@@ -50,8 +52,16 @@ pipeline {
           sh '''
             set -e
             node -v
-            npm ci || npm install
+            npm ci
           '''
+        }
+      }
+    }
+
+    stage('Lint') {
+      steps {
+        dir('app') {
+          sh 'npm run lint'
         }
       }
     }
@@ -121,10 +131,14 @@ pipeline {
 
   post {
     success {
-      echo "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER} — deployed ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG}"
+      mail to: NOTIFY_RECIPIENTS,
+        subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "Image ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG} deployed to ${SERVICE_NAME}."
     }
     failure {
-      echo "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}. Check console output."
+      mail to: NOTIFY_RECIPIENTS,
+        subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "Pipeline failed before completing deployment. Review Jenkins console for details."
     }
   }
 }

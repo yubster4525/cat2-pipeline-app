@@ -23,6 +23,14 @@ flowchart LR
     ECS --> CloudWatch[(CloudWatch Logs & Metrics)]
 ```
 
+## Source Control & Webhooks
+
+- Branching strategy: `main` is protected (requires PR reviews), `dev` is the integration branch, and short-lived `feature/*` branches are merged through pull requests.
+- GitHub webhook delivers push events to Jenkins (`/github-webhook/`) so every merge to `dev` or `main` triggers the pipeline.
+- Branch protection uses required status checks (lint, test, deploy) before allowing merges into `main`.
+
+![GitHub webhook configuration](screenshots/github-webhook.png)
+
 ## Repository Structure
 
 - `app/` – Sample Node.js application with a simple health check endpoint and minimal unit tests.
@@ -64,21 +72,22 @@ flowchart LR
 
 ## Pipeline Stages (Jenkinsfile)
 
-1. **Prepare** – Resolves image name/tag from parameters and prints them for traceability.
-2. **Checkout** – Clones the repository associated with the Jenkins job.
-3. **Install Dependencies** – Installs Node.js packages under `app/`.
-4. **Unit Tests** – Runs the Node-based smoke tests (`npm test`).
-5. **Build Docker Image** – Compiles a container image with the application bundled.
-6. **Push to Amazon ECR** – Authenticates with ECR, ensures the repository exists, tags, and pushes the image (default tag: Jenkins build number).
-7. **Deploy to Amazon ECS** *(optional toggle)* – Renders the task definition template, registers a new revision, and updates the ECS service. Controlled by the `AUTO_DEPLOY` parameter.
-8. **Post Actions** – Sends email on success/failure. Extend with Slack/MS Teams or CloudWatch alarms as needed.
+1. **Checkout** – Pulls the requested branch via SCM webhooks.
+2. **Prepare Metadata** – Resolves the Docker tag, preferring an explicit parameter, otherwise `GIT_COMMIT[0:7]`, and falls back to the Jenkins build number.
+3. **Install Dependencies** – Runs `npm ci` inside `app/` for deterministic installs.
+4. **Lint** – Executes `npm run lint` (ESLint) to enforce code quality before running tests.
+5. **Unit Tests** – Runs the Node-based smoke tests (`npm test`) and archives the console output for proof.
+6. **Build Docker Image** – Compiles the container image targeting `linux/amd64`.
+7. **Push to Amazon ECR** – Logs into ECR, creates the repository if needed, and pushes both the short-SHA tag and `latest`.
+8. **Deploy to Amazon ECS** *(optional toggle)* – Registers a new task definition from `infra/task-definition-template.json` and updates the Fargate service.
+9. **Post Actions** – Uses Jenkins Mailer to notify `NOTIFY_RECIPIENTS` on success/failure (replace with your distro or Slack bridge).
 
 ## Local Development & Validation
 
 ```bash
 # Install dependencies and run tests locally
 cd app
-npm install
+npm ci
 npm test
 
 # Build the Docker image
@@ -104,12 +113,36 @@ Update the template if your container ports or environment variables differ.
 - Extend `deploy_to_ecs.sh` to emit additional metrics or integrate with AWS CloudWatch Synthetics for uptime checks.
 - Jenkins pipeline currently relies on email alerts; replace/add Slack or Amazon SNS notifications as required by your environment.
 
+## Security & Compliance
+
+- Amazon ECR repository-level scan-on-push is enabled to detect CVEs immediately after every image push. CLI: `aws ecr put-image-scanning-configuration --repository-name cat2-pipeline-app --image-scanning-configuration scanOnPush=true --region ap-south-1`.
+- Optional: add `trivy image ${RESOLVED_IMAGE_NAME}:${RESOLVED_IMAGE_TAG}` inside the Jenkins pipeline for an additional supply-chain gate.
+
+![ECR scan on push](screenshots/ecr-scan-on-push.png)
+
+## HTTPS & Network Hardening
+
+- The Application Load Balancer terminates TLS with an ACM-issued certificate on listener `HTTPS:443` and redirects HTTP requests to HTTPS.
+- AWS WAF (optional) can be attached to the ALB ARN for extra filtering.
+
+![ALB HTTPS listener with ACM certificate](screenshots/alb-https-listener.png)
+
+## Infrastructure as Code Reference
+
+- `infra/task-definition-template.json` represents the Fargate task definition, ready to be parameterised by Terraform/CloudFormation.
+- Additional IaC (ECS service, ALB, security groups) can be layered using Terraform modules or AWS CDK; the repository keeps infra artefacts under `infra/` for traceability.
+
 ## Submission Checklist
 
 - [ ] Architecture diagram (export Mermaid render or replicate in draw.io) showing CI/CD flow.
+- [ ] Screenshot of GitHub webhook configuration + branch protection (e.g., `screenshots/github-webhook.png`).
+- [ ] Screenshot of Jenkins lint/test console output (e.g., `screenshots/jenkins-npm-test.png`).
+- [ ] Screenshot of Jenkins email/Slack notification (e.g., `screenshots/jenkins-email-notification.png`).
 - [ ] Screenshot of Jenkins console or stages view for a successful run.
 - [ ] Screenshot of the image published in Amazon ECR.
+- [ ] Screenshot showing scan-on-push enabled or Trivy results.
 - [ ] Screenshot of the application endpoint (e.g., ALB DNS) showing the running app.
+- [ ] Screenshot demonstrating HTTPS listener + ACM on the ALB.
 - [ ] Screenshot of the Jenkinsfile (or attach the file itself) for submission.
 - [ ] Extracredit: Screenshot/evidence of CloudWatch metrics or alerts.
 
