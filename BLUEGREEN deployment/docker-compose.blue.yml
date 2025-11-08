@@ -1,0 +1,11 @@
+services:
+  app-blue:
+    image: ${DOCKER_IMAGE}
+    container_name: blue-app
+    environment:
+      - APP_COLOR=blue
+      - APP_VERSION=${APP_VERSION:-v1}
+      - PORT=3000
+    ports:
+      - "8081:3000"
+    restart: unless-stopped

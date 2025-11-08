@@ -1,0 +1,12 @@
+upstream bluegreen_upstream {
+    server 127.0.0.1:${ACTIVE_PORT};
+}
+
+server {
+    listen 80;
+    location / {
+        proxy_pass http://bluegreen_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}

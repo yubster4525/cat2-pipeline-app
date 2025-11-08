@@ -1,0 +1,102 @@
+pipeline {
+  agent any
+
+  parameters {
+    choice(name: 'TARGET_COLOR', choices: ['blue', 'green'], description: 'Which environment to deploy to.')
+    booleanParam(name: 'SWITCH_TRAFFIC', defaultValue: true, description: 'Flip the load balancer after a successful deploy.')
+    string(name: 'APP_VERSION', defaultValue: '', description: 'Optional app version tag (falls back to Git short SHA).')
+  }
+
+  environment {
+    DOCKER_REGISTRY = 'docker.io'
+    DOCKER_IMAGE = 'your-dockerhub-user/bluegreen-demo'
+    REMOTE_HOST = credentials('bluegreen-ssh-host')
+    REMOTE_PATH = '/opt/bluegreen'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Resolve Metadata') {
+      steps {
+        script {
+          env.RESOLVED_VERSION = params.APP_VERSION?.trim() ? params.APP_VERSION.trim() : env.GIT_COMMIT.take(7)
+          env.IMAGE_TAG = "${env.DOCKER_IMAGE}:${env.RESOLVED_VERSION}"
+          echo "Using tag ${env.IMAGE_TAG} deploying to ${params.TARGET_COLOR}"
+        }
+      }
+    }
+
+    stage('Install Dependencies') {
+      steps {
+        dir('BLUEGREEN deployment/app') {
+          sh 'npm install'
+        }
+      }
+    }
+
+    stage('Unit Tests') {
+      steps {
+        dir('BLUEGREEN deployment/app') {
+          sh 'npm test'
+        }
+      }
+    }
+
+    stage('Docker Build') {
+      steps {
+        sh "docker build -t ${IMAGE_TAG} -f 'BLUEGREEN deployment/Dockerfile' 'BLUEGREEN deployment'"
+      }
+    }
+
+    stage('Push to Docker Hub') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh '''
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+            docker push ${IMAGE_TAG}
+          '''
+        }
+      }
+    }
+
+    stage('Deploy Target Color') {
+      steps {
+        withCredentials([sshUserPrivateKey(credentialsId: 'bluegreen-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+          sh '''
+            chmod 600 "$SSH_KEY"
+            REMOTE_HOST="$SSH_USER@$REMOTE_HOST" \
+            COLOR=${TARGET_COLOR} \
+            DOCKER_IMAGE=${IMAGE_TAG} \
+            REMOTE_PATH=${REMOTE_PATH} \
+            SSH_AUTH_SOCK= \
+            ssh -i "$SSH_KEY" "$SSH_USER@$REMOTE_HOST" true
+          '''
+          withEnv([
+            "COLOR=${params.TARGET_COLOR}",
+            "DOCKER_IMAGE=${env.IMAGE_TAG}",
+            "REMOTE_HOST=${env.REMOTE_HOST}",
+            "REMOTE_PATH=${env.REMOTE_PATH}"
+          ]) {
+            sh "bash 'BLUEGREEN deployment/scripts/deploy_color.sh'"
+          }
+        }
+      }
+    }
+
+    stage('Switch Traffic') {
+      when { expression { return params.SWITCH_TRAFFIC } }
+      steps {
+        withEnv([
+          "ACTIVE_COLOR=${params.TARGET_COLOR}",
+          "REMOTE_HOST=${env.REMOTE_HOST}",
+          "REMOTE_PATH=${env.REMOTE_PATH}"
+        ]) {
+          sh "bash 'BLUEGREEN deployment/scripts/switch_traffic.sh'"
+        }
+      }
+    }
+  }
+}
