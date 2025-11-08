@@ -8,7 +8,7 @@
   "taskRoleArn": "${TASK_ROLE_ARN}",
   "containerDefinitions": [
     {
-      "name": "web",
+      "name": "app",
       "image": "${IMAGE_URI}",
       "essential": true,
       "portMappings": [
