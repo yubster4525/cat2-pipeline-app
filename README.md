@@ -113,10 +113,6 @@ Update the template if your container ports or environment variables differ.
 - [ ] Screenshot of the Jenkinsfile (or attach the file itself) for submission.
 - [ ] Extracredit: Screenshot/evidence of CloudWatch metrics or alerts.
 
-## Next Steps / Enhancements
+## Conclusion
 
-- Add linting (ESLint) and SonarQube quality gate stage.
-- Integrate automated Selenium or Postman tests after deployment.
-- Parameterize the AWS region, cluster, and service via Jenkins choice parameters to support multiple environments (dev/stage/prod).
-- Swap ECS for AWS App Runner, AWS Elastic Beanstalk, or Kubernetes (EKS) if your use case changes.
-
+This repository now covers the full assignment scope: source control with GitHub, automated CI (npm install/test), Docker image build, push to Amazon ECR, scripted ECS Fargate deployment, monitoring hooks, and submission-ready documentation. Use it as-is for the CAT2 deliverable or extend it further to match your production environment.
