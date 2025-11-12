@@ -131,14 +131,11 @@ pipeline {
 
   post {
     success {
-      mail to: NOTIFY_RECIPIENTS,
-        subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        body: "Image ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG} deployed to ${SERVICE_NAME}."
+      echo "✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+      echo "Image ${env.RESOLVED_IMAGE_NAME}:${env.RESOLVED_IMAGE_TAG} deployed"
     }
     failure {
-      mail to: NOTIFY_RECIPIENTS,
-        subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        body: "Pipeline failed before completing deployment. Review Jenkins console for details."
+      echo "❌ FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
     }
   }
 }

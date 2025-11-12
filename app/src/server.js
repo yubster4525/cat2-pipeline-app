@@ -8,7 +8,7 @@ function createApp() {
   });
 
   app.get('/', (_req, res) => {
-    res.status(200).send('CI/CD pipeline demo application is running.');
+    res.status(200).send('CI/CD pipeline demo application is running. v2');
   });
 
   return app;
